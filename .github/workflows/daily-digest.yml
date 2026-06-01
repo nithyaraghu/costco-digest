@@ -29,8 +29,5 @@ jobs:
           COSTCO_INTERESTS: ${{ vars.COSTCO_INTERESTS }}
           COSTCO_REGION: ${{ vars.COSTCO_REGION }}
           RSS_FEEDS: ${{ vars.RSS_FEEDS }}
-          # Optional Costco.com source — leave the secret unset to skip it.
-          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-          COSTCO_ONLINE_URLS: ${{ vars.COSTCO_ONLINE_URLS }}
           LOOKBACK_HOURS: "30"
         run: python costco_digest.py

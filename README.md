@@ -77,23 +77,13 @@ Prefer Railway? Deploy the script as a cron service instead — same env vars.
   it.** The repo ships with the list empty on purpose so you only add feeds you trust.
 - `COSTCO_INTERESTS` — free text. This is what Groq uses to pick your "Top picks,"
   so be specific (e.g. "sugar-free snacks, high-protein, cast iron, label-maker refills").
-- `SCRAPER_API_KEY` / `COSTCO_ONLINE_URLS` — turn on the Costco.com new-arrivals source.
-  Costco.com sits behind Akamai bot protection, so it's routed through a managed scraper
-  API (ScrapingBee by default — it renders JS and uses premium proxies to get past the
-  block). It's **opt-in**: with no `SCRAPER_API_KEY` set, the source is skipped and the
-  build stays free. Add a key, then set `COSTCO_ONLINE_URLS` to the page(s) you want
-  scraped (defaults to `https://www.costco.com/whats-new.html` — **verify it loads in a
-  browser first**, Costco moves these around). Point `SCRAPER_ENDPOINT` at another
-  provider if you don't use ScrapingBee. Note: this costs money and is ToS-sensitive —
-  personal, low-volume use only.
 
 ## Limitations / honest caveats
 
-- **Online new-arrivals from Costco.com** are now wired in (see `fetch_costco_online`),
-  but routed through a managed scraper API (ScrapingBee / Apify) because the site sits
-  behind Akamai bot protection. It's **off by default** — it only runs when you set
-  `SCRAPER_API_KEY` — because it costs money and is ToS-sensitive. See "Customizing the
-  sources" above to switch it on.
+- **Online new-arrivals from Costco.com directly** aren't wired in, because the site
+  sits behind Akamai bot protection. If you want that source, you'd route it through a
+  managed scraper API (ScrapingBee / Apify) and add a fetcher — doable, but it costs and
+  it's ToS-sensitive, so it's left out of the default build.
 - Quality tracks your sources. Reddit is high-volume and noisy; the Groq filter throws
   out the junk, but a couple of good blog feeds will lift signal a lot.
 - Personal, low-volume use only. Scraping public pages for yourself is one thing;

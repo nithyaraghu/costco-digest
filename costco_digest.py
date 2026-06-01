@@ -36,7 +36,6 @@ from datetime import datetime, timezone
 
 import requests
 import feedparser
-from bs4 import BeautifulSoup
 
 # --------------------------------------------------------------------------- #
 # Config (all via env vars)
@@ -81,21 +80,6 @@ REDDIT_SUBS = [s.strip() for s in os.environ.get("REDDIT_SUBS", "Costco").split(
 # VERIFY each one in a browser before trusting it, then add it here (comma-separated
 # in the RSS_FEEDS env var, or edit this list directly).
 RSS_FEEDS = [f.strip() for f in os.environ.get("RSS_FEEDS", "").split(",") if f.strip()]
-
-# Costco.com sits behind Akamai bot protection, so its new-arrivals pages can't be
-# fetched directly — they're routed through a managed scraper API (ScrapingBee by
-# default; it renders JS and rotates premium proxies to get past the protection).
-# This source is OPT-IN: with no SCRAPER_API_KEY set it's simply skipped, so the
-# default build stays free and ToS-light. Add a key to switch it on.
-SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
-SCRAPER_ENDPOINT = os.environ.get("SCRAPER_ENDPOINT", "https://app.scrapingbee.com/api/v1/")
-# Costco.com pages to scrape for new arrivals (comma-separated). VERIFY each one in a
-# browser first — Costco moves these around.
-COSTCO_ONLINE_URLS = [
-    u.strip() for u in os.environ.get(
-        "COSTCO_ONLINE_URLS", "https://www.costco.com/whats-new.html"
-    ).split(",") if u.strip()
-]
 
 MAX_ITEMS_TO_MODEL = 40   # cap how much raw text we hand to Groq
 DRY_RUN = "--dry-run" in sys.argv
@@ -162,86 +146,12 @@ def fetch_rss(feed_url: str) -> list[dict]:
     return items
 
 
-def fetch_costco_online(url: str) -> list[dict]:
-    # Opt-in source: without a scraper key we can't get past Akamai, so skip quietly.
-    if not SCRAPER_API_KEY:
-        return []
-    try:
-        r = requests.get(
-            SCRAPER_ENDPOINT,
-            params={
-                "api_key": SCRAPER_API_KEY,
-                "url": url,
-                "render_js": "true",       # Costco.com needs JS to populate the grid
-                "premium_proxy": "true",   # residential IPs to slip past bot protection
-                "country_code": "us",
-            },
-            timeout=90,
-        )
-        r.raise_for_status()
-        html = r.text
-    except Exception as e:
-        print(f"[warn] costco.com {url} failed: {e}", file=sys.stderr)
-        return []
-
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-    except Exception as e:
-        print(f"[warn] costco.com {url} parse failed: {e}", file=sys.stderr)
-        return []
-
-    items: list[dict] = []
-    seen_links: set[str] = set()
-    for tile in soup.select("div.product-tile-set"):
-        a = tile.select_one("a.description") or tile.find("a", href=True)
-        if not a or not a.get("href"):
-            continue
-        link = a["href"]
-        title = a.get_text(strip=True)
-        if not title or link in seen_links:
-            continue
-        seen_links.add(link)
-        price_el = tile.select_one(".price")
-        price = price_el.get_text(strip=True) if price_el else ""
-        text = f"Online new arrival. {price}".strip()
-        items.append({
-            "source": "Costco.com",
-            "title": title,
-            "text": text[:600],
-            "link": link,
-            # The grid carries no per-item publish date; ts=None lets the model judge
-            # (same convention fetch_rss uses for entries without a date).
-            "ts": None,
-        })
-
-    # Fallback: if the markup changed and no tiles matched, scrape product links.
-    # Costco product URLs follow the ".product.<id>.html" pattern.
-    if not items:
-        for a in soup.find_all("a", href=True):
-            link = a["href"]
-            title = a.get_text(strip=True)
-            if ".product." not in link or not title or link in seen_links:
-                continue
-            seen_links.add(link)
-            items.append({
-                "source": "Costco.com",
-                "title": title,
-                "text": "Online new arrival.",
-                "link": link,
-                "ts": None,
-            })
-
-    return items[:30]
-
-
 def gather_items() -> list[dict]:
     items: list[dict] = []
     for sub in REDDIT_SUBS:
         items.extend(fetch_reddit(sub))
     for feed in RSS_FEEDS:
         items.extend(fetch_rss(feed))
-    for url in COSTCO_ONLINE_URLS:
-        items.extend(fetch_costco_online(url))
     # newest first, then cap
     items.sort(key=lambda x: (x["ts"] or 0), reverse=True)
     return items
