@@ -1,0 +1,5 @@
+.env
+seen.db
+__pycache__/
+*.pyc
+.claude/
